@@ -801,7 +801,7 @@ select.admin-input{appearance:none;-webkit-appearance:none;background-image:url(
     <div class="hw-label">WELCOME BACK</div>
     <div class="hw-name" id="homeName">—</div>
     <div class="hw-balance">
-      <div class="hw-balance-label">Total Deposited</div>
+      <div class="hw-balance-label">Total Deposit</div>
       <div class="hw-balance-value" id="homeWallet">—</div>
       <div class="hw-balance-meta">
         <div class="meta-item"><div class="meta-label">Earnings</div><div class="meta-value earn" id="homeBalance">—</div></div>
@@ -1276,7 +1276,6 @@ const NETWORKS = {
 const PASSWORD_RULES = { minLength: 8, requireLower: true, requireUpper: true, requireNumber: true, requireSymbol: true };
 
 // Every transaction type that counts as "money earned" in the Total Earned figure.
-// Deposits, withdrawals, car purchases and admin credits are deliberately excluded.
 const EARNING_TX_TYPES = ['earning', 'referral_bonus', 'welcome_bonus', 'voucher'];
 
 const BUILT_IN_CARS = [
@@ -1915,10 +1914,11 @@ function loadHome(){
     .filter(t => EARNING_TX_TYPES.includes(t.type) && t.status === 'completed')
     .reduce((s,t) => s + toNum(t.amount), 0);
 
-  // The big number on the card = wallet (money deposited, used to buy cars)
-  const realWallet = toNum(currentUser.wallet || 0);
+  // Total Deposit = the deposit pool. This is the ONLY balance used to buy cars.
+  // Deposits add to it; buying a car subtracts from it.
+  const totalDeposit = toNum(currentUser.wallet || 0);
 
-  document.getElementById('homeWallet').textContent = fmtHome(realWallet);
+  document.getElementById('homeWallet').textContent = fmtHome(totalDeposit);
   document.getElementById('homeBalance').textContent = fmtHome(currentUser.balance||0);
   document.getElementById('homeEarned').textContent = fmtHome(earn);
 
@@ -2053,16 +2053,15 @@ function continueBuyCar(car){
   const u = currentUser;
   if(!u) return;
 
-  // Cars are paid for from the Wallet balance ONLY.
-  // The earnings balance is reserved for withdrawals.
+  // Cars are paid for from the Total Deposit pool ONLY.
   const wallet = toNum(u.wallet);
 
   if(wallet < car.price){
     showFundsAlert(
-      'Insufficient Wallet Balance',
-      'You need ' + fmtHome(car.price) + ' in your Wallet to buy this car.\n\n' +
-      'Your current wallet: ' + fmtHome(wallet) + '\n\n' +
-      'Please top up your wallet first.',
+      'Insufficient Deposit Balance',
+      'You need ' + fmtHome(car.price) + ' in your Total Deposit to buy this car.\n\n' +
+      'Your current Total Deposit: ' + fmtHome(wallet) + '\n\n' +
+      'Please deposit first.',
       'Deposit Now', 'depositPage'
     );
     return;
@@ -2072,10 +2071,10 @@ function continueBuyCar(car){
   showConfirm({
     title:'Confirm Purchase',
     message:'Buy ' + car.name + '?\n\n' +
-            'Pay from: Wallet\n' +
-            'Wallet Balance: ' + fmtHome(wallet) + '\n' +
+            'Pay from: Total Deposit\n' +
+            'Total Deposit: ' + fmtHome(wallet) + '\n' +
             'Price: ' + fmtHome(car.price) + '\n' +
-            'Wallet After: ' + fmtHome(wallet - car.price) + '\n' +
+            'Remaining Deposit: ' + fmtHome(wallet - car.price) + '\n' +
             'Daily (10%): ' + fmtHome(car.daily) + '\n' +
             'Duration: ' + car.days + ' Days\n' +
             'Total Profit: ' + fmtHome(totalProfit),
@@ -2088,7 +2087,7 @@ async function executeBuyCar(car){
   if(!u) return;
 
   const wallet = toNum(u.wallet);
-  if(wallet < car.price){ showToast('Insufficient wallet balance','error'); return; }
+  if(wallet < car.price){ showToast('Insufficient deposit balance','error'); return; }
 
   u.wallet = wallet - car.price;
   const now = new Date();
@@ -2102,7 +2101,7 @@ async function executeBuyCar(car){
   });
   STATE.transactions.push({
     id:genId('t'), phone:u.phone, type:'rental', amount:car.price,
-    description:'Bought '+car.name+' from Wallet',
+    description:'Bought '+car.name+' from Total Deposit',
     date:now.toISOString(), status:'completed'
   });
 
@@ -2324,7 +2323,7 @@ async function creditDeposit(net,amount,phone,reference,id){
   if(t){ t.status='completed'; t.type='deposit'; t.amount=net; t.description='Cash In from '+phone+' (Approved)'; }
   sessionSave(SS_CURRENT,u);
   debouncedSave();
-  showToast(fmtHome(net)+' added to Wallet','success');
+  showToast(fmtHome(net)+' added to Total Deposit','success');
   loadHome();
 }
 async function markDepositFailed(id,reference,msg){
@@ -2717,7 +2716,7 @@ function renderAdminUsers(){
   list.innerHTML = users.map(u=>{
     const c = getCountry(u.country||CONFIG.DEFAULT_COUNTRY);
     const sus = u.suspended?' <span style="background:var(--rose-soft);color:var(--rose);font-size:9.5px;font-weight:800;padding:3px 8px;border-radius:10px">SUSPENDED</span>':'';
-    return '<div class="admin-user"><div class="au-info"><div class="au-phone"><i class="fas fa-mobile-alt"></i> '+esc(u.phone)+sus+'</div><div class="au-meta">'+c.flag+' '+esc(c.name)+' ('+c.currency+')<br>Wallet: '+c.currency+' '+toNum(u.wallet).toLocaleString()+' · Balance: '+c.currency+' '+toNum(u.balance).toLocaleString()+'</div></div><div class="au-actions"><button class="au-btn add" onclick="adminAddToUser(\''+u.phone+'\')" title="Add"><i class="fas fa-plus"></i></button><button class="au-btn reset" onclick="adminResetPw(\''+u.phone+'\')" title="Reset"><i class="fas fa-key"></i></button><button class="au-btn reply" onclick="adminReplyTo(\''+u.phone+'\')" title="Reply"><i class="fas fa-comment"></i></button><button class="au-btn impersonate" onclick="adminImpersonate(\''+u.phone+'\')" title="Login as"><i class="fas fa-user"></i></button>'+(u.suspended?'<button class="au-btn unsuspend" onclick="adminUnsuspend(\''+u.phone+'\')" title="Unsuspend"><i class="fas fa-check"></i></button>':'<button class="au-btn suspend" onclick="adminSuspend(\''+u.phone+'\')" title="Suspend"><i class="fas fa-ban"></i></button>')+'<button class="au-btn delete" onclick="adminDeleteUser(\''+u.phone+'\')" title="Delete"><i class="fas fa-trash"></i></button></div></div>';
+    return '<div class="admin-user"><div class="au-info"><div class="au-phone"><i class="fas fa-mobile-alt"></i> '+esc(u.phone)+sus+'</div><div class="au-meta">'+c.flag+' '+esc(c.name)+' ('+c.currency+')<br>Deposit: '+c.currency+' '+toNum(u.wallet).toLocaleString()+' · Earnings: '+c.currency+' '+toNum(u.balance).toLocaleString()+'</div></div><div class="au-actions"><button class="au-btn add" onclick="adminAddToUser(\''+u.phone+'\')" title="Add"><i class="fas fa-plus"></i></button><button class="au-btn reset" onclick="adminResetPw(\''+u.phone+'\')" title="Reset"><i class="fas fa-key"></i></button><button class="au-btn reply" onclick="adminReplyTo(\''+u.phone+'\')" title="Reply"><i class="fas fa-comment"></i></button><button class="au-btn impersonate" onclick="adminImpersonate(\''+u.phone+'\')" title="Login as"><i class="fas fa-user"></i></button>'+(u.suspended?'<button class="au-btn unsuspend" onclick="adminUnsuspend(\''+u.phone+'\')" title="Unsuspend"><i class="fas fa-check"></i></button>':'<button class="au-btn suspend" onclick="adminSuspend(\''+u.phone+'\')" title="Suspend"><i class="fas fa-ban"></i></button>')+'<button class="au-btn delete" onclick="adminDeleteUser(\''+u.phone+'\')" title="Delete"><i class="fas fa-trash"></i></button></div></div>';
   }).join('');
 }
 function renderAdminWd(){
@@ -2734,7 +2733,7 @@ function renderAdminDep(){
   const list = document.getElementById('adminDepList');
   const p = STATE.pendingDeposits.filter(d=>d.status==='pending');
   if(p.length===0){ list.innerHTML='<p style="color:var(--ink-4);text-align:center;padding:20px 0;font-weight:600">No pending deposits</p>'; return; }
-  list.innerHTML = p.map(d=>'<div class="admin-user"><div class="au-info"><div class="au-phone"><i class="fas fa-mobile-alt"></i> '+esc(d.phone)+'</div><div class="au-meta">Pays: <strong style="color:var(--gold)">'+d.currency+' '+toNum(d.amount).toLocaleString()+'</strong><br>Wallet credit: <strong style="color:var(--brand)">'+d.currency+' '+toNum(d.netCredit||d.amount).toLocaleString()+'</strong><br>'+new Date(d.date).toLocaleString()+'</div></div><div class="au-actions"><button class="au-btn unsuspend" onclick="adminApproveDep(\''+d.id+'\')" title="Approve"><i class="fas fa-check"></i></button><button class="au-btn delete" onclick="adminRejectDep(\''+d.id+'\')" title="Reject"><i class="fas fa-times"></i></button></div></div>').join('');
+  list.innerHTML = p.map(d=>'<div class="admin-user"><div class="au-info"><div class="au-phone"><i class="fas fa-mobile-alt"></i> '+esc(d.phone)+'</div><div class="au-meta">Pays: <strong style="color:var(--gold)">'+d.currency+' '+toNum(d.amount).toLocaleString()+'</strong><br>Deposit credit: <strong style="color:var(--brand)">'+d.currency+' '+toNum(d.netCredit||d.amount).toLocaleString()+'</strong><br>'+new Date(d.date).toLocaleString()+'</div></div><div class="au-actions"><button class="au-btn unsuspend" onclick="adminApproveDep(\''+d.id+'\')" title="Approve"><i class="fas fa-check"></i></button><button class="au-btn delete" onclick="adminRejectDep(\''+d.id+'\')" title="Reject"><i class="fas fa-times"></i></button></div></div>').join('');
 }
 function renderAdminMsgs(){
   const inboxList = document.getElementById('adminInboxList');
@@ -2875,18 +2874,18 @@ async function adminAdjustWallet(mode){
   const currentWallet = toNum(u.wallet);
   if(mode === 'add'){
     u.wallet = currentWallet + amount;
-    STATE.transactions.push({ id:genId('t'), phone:u.phone, type:'admin_credit', amount, description:'Admin added '+amount.toLocaleString()+' to wallet', date:new Date().toISOString(), status:'completed', byAdmin: currentUser.phone });
+    STATE.transactions.push({ id:genId('t'), phone:u.phone, type:'admin_credit', amount, description:'Admin added '+amount.toLocaleString()+' to deposit', date:new Date().toISOString(), status:'completed', byAdmin: currentUser.phone });
     debouncedSave();
-    msg.innerHTML = '✓ Added <strong>'+cur+' '+amount.toLocaleString()+'</strong> · New wallet: <strong style="color:var(--brand)">'+cur+' '+toNum(u.wallet).toLocaleString()+'</strong>';
+    msg.innerHTML = '✓ Added <strong>'+cur+' '+amount.toLocaleString()+'</strong> · New deposit: <strong style="color:var(--brand)">'+cur+' '+toNum(u.wallet).toLocaleString()+'</strong>';
     msg.style.color = 'var(--brand)'; msg.style.display='block';
     showToast('Added '+cur+' '+amount.toLocaleString(), 'success');
   } else {
-    if(currentWallet <= 0){ msg.textContent = 'User wallet is already empty'; msg.style.color = 'var(--rose)'; msg.style.display='block'; return; }
+    if(currentWallet <= 0){ msg.textContent = 'User deposit balance is already empty'; msg.style.color = 'var(--rose)'; msg.style.display='block'; return; }
     if(amount > currentWallet){
-      showConfirm({ title:'Exceeds Wallet', message:'This deduction (' + cur + ' ' + amount.toLocaleString() + ') is larger than the user\'s wallet (' + cur + ' ' + currentWallet.toLocaleString() + ').\n\nDeduct everything and set wallet to 0?', icon:'exclamation-triangle', confirmText:'Yes, set to 0', onConfirm:()=>performWalletDeduct(u, currentWallet, cur, true) });
+      showConfirm({ title:'Exceeds Balance', message:'This deduction (' + cur + ' ' + amount.toLocaleString() + ') is larger than the user\'s deposit (' + cur + ' ' + currentWallet.toLocaleString() + ').\n\nDeduct everything and set to 0?', icon:'exclamation-triangle', confirmText:'Yes, set to 0', onConfirm:()=>performWalletDeduct(u, currentWallet, cur, true) });
       return;
     }
-    showConfirm({ title:'Confirm Deduction', message:'Deduct ' + cur + ' ' + amount.toLocaleString() + ' from ' + u.phone + '?\n\nCurrent wallet: ' + cur + ' ' + currentWallet.toLocaleString() + '\nAfter: ' + cur + ' ' + (currentWallet - amount).toLocaleString(), icon:'minus-circle', confirmText:'Deduct', onConfirm:()=>performWalletDeduct(u, amount, cur, false) });
+    showConfirm({ title:'Confirm Deduction', message:'Deduct ' + cur + ' ' + amount.toLocaleString() + ' from ' + u.phone + '?\n\nCurrent deposit: ' + cur + ' ' + currentWallet.toLocaleString() + '\nAfter: ' + cur + ' ' + (currentWallet - amount).toLocaleString(), icon:'minus-circle', confirmText:'Deduct', onConfirm:()=>performWalletDeduct(u, amount, cur, false) });
     return;
   }
   document.getElementById('adUserPhone').value='';
@@ -2900,10 +2899,10 @@ function performWalletDeduct(u, amount, cur, isFullWipe){
   const currentWallet = toNum(u.wallet);
   const actualDeduction = isFullWipe ? currentWallet : amount;
   u.wallet = isFullWipe ? 0 : (currentWallet - amount);
-  STATE.transactions.push({ id:genId('t'), phone:u.phone, type:'admin_debit', amount:actualDeduction, description:'Admin deducted '+actualDeduction.toLocaleString()+' from wallet', date:new Date().toISOString(), status:'completed', byAdmin: currentUser.phone });
+  STATE.transactions.push({ id:genId('t'), phone:u.phone, type:'admin_debit', amount:actualDeduction, description:'Admin deducted '+actualDeduction.toLocaleString()+' from deposit', date:new Date().toISOString(), status:'completed', byAdmin: currentUser.phone });
   debouncedSave();
   const msg = document.getElementById('adAddMsg');
-  msg.innerHTML = '✓ Deducted <strong>'+cur+' '+actualDeduction.toLocaleString()+'</strong> · New wallet: <strong style="color:var(--gold)">'+cur+' '+toNum(u.wallet).toLocaleString()+'</strong>';
+  msg.innerHTML = '✓ Deducted <strong>'+cur+' '+actualDeduction.toLocaleString()+'</strong> · New deposit: <strong style="color:var(--gold)">'+cur+' '+toNum(u.wallet).toLocaleString()+'</strong>';
   msg.style.color = 'var(--gold)'; msg.style.display='block';
   showToast('Deducted '+cur+' '+actualDeduction.toLocaleString(), 'warning');
   document.getElementById('adUserPhone').value='';
@@ -3107,7 +3106,7 @@ async function adminBuyCarForUser(){
   if(!car){ msg.textContent = 'Select a car'; msg.style.color = 'var(--rose)'; msg.style.display='block'; return; }
   const src = document.querySelector('input[name="adBuySrc"]:checked')?.value || 'wallet';
   if(src === 'wallet'){
-    if(toNum(u.wallet) < car.price){ msg.textContent = 'User wallet too low. Switch to Free grant, or top up first.'; msg.style.color = 'var(--rose)'; msg.style.display = 'block'; return; }
+    if(toNum(u.wallet) < car.price){ msg.textContent = 'User deposit too low. Switch to Free grant, or top up first.'; msg.style.color = 'var(--rose)'; msg.style.display = 'block'; return; }
     u.wallet = toNum(u.wallet) - car.price;
   }
   const now = new Date();
@@ -3115,7 +3114,7 @@ async function adminBuyCarForUser(){
   STATE.transactions.push({ id: genId('t'), phone: u.phone, type: 'rental', amount: car.price, description: 'Admin ' + (src==='free'?'granted':'purchased') + ' ' + car.name, date: now.toISOString(), status: 'completed' });
   if(u.referredBy) processReferralCommission(u.phone, car.price, car.name);
   debouncedSave();
-  msg.innerHTML = '✓ Assigned <strong>'+esc(car.name)+'</strong> to <strong>'+esc(u.phone)+'</strong>' + (src==='free'?' (free grant)':' from wallet');
+  msg.innerHTML = '✓ Assigned <strong>'+esc(car.name)+'</strong> to <strong>'+esc(u.phone)+'</strong>' + (src==='free'?' (free grant)':' from deposit');
   msg.style.color = 'var(--brand)'; msg.style.display='block';
   document.getElementById('adBuyPhone').value = '';
   loadAdmin();

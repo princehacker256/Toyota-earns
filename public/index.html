@@ -428,7 +428,6 @@ button:not(:disabled):active{transform:scale(.97)}
 .ussd-toast::before{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.2) 50%,transparent 100%);border-radius:20px;animation:toastShimmer 2.4s ease-in-out infinite;pointer-events:none}
 @keyframes toastShimmer{0%{left:-100%}55%{left:100%}100%{left:100%}}
 
-/* ═══════════════ WITHDRAWAL TOAST — BOTTOM LEFT ═══════════════ */
 #withdrawToastStack{
   position:fixed;
   bottom:calc(88px + env(safe-area-inset-bottom));
@@ -519,7 +518,6 @@ button:not(:disabled):active{transform:scale(.97)}
 #snackbar.show{visibility:visible;animation:snack 3s ease}
 @keyframes snack{0%{opacity:0;transform:translate(-50%,20px)}10%,90%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,20px)}}
 
-/* ═══════════════ ADMIN DASHBOARD — PROFESSIONAL ═══════════════ */
 .admin-page{background:radial-gradient(ellipse at top left,rgba(0,212,160,.08),transparent 45%),radial-gradient(ellipse at top right,rgba(99,102,241,.06),transparent 50%),var(--bg);min-height:100vh;padding:20px 16px 60px}
 .admin-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--line)}
 .admin-header-left{display:flex;flex-direction:column;gap:10px}
@@ -803,7 +801,7 @@ select.admin-input{appearance:none;-webkit-appearance:none;background-image:url(
     <div class="hw-label">WELCOME BACK</div>
     <div class="hw-name" id="homeName">—</div>
     <div class="hw-balance">
-      <div class="hw-balance-label">Total Wallet Balance</div>
+      <div class="hw-balance-label">Total Deposited</div>
       <div class="hw-balance-value" id="homeWallet">—</div>
       <div class="hw-balance-meta">
         <div class="meta-item"><div class="meta-label">Earnings</div><div class="meta-value earn" id="homeBalance">—</div></div>
@@ -1277,6 +1275,10 @@ const NETWORKS = {
 
 const PASSWORD_RULES = { minLength: 8, requireLower: true, requireUpper: true, requireNumber: true, requireSymbol: true };
 
+// Every transaction type that counts as "money earned" in the Total Earned figure.
+// Deposits, withdrawals, car purchases and admin credits are deliberately excluded.
+const EARNING_TX_TYPES = ['earning', 'referral_bonus', 'welcome_bonus', 'voucher'];
+
 const BUILT_IN_CARS = [
   {id:1,name:'RAV4 (XA10)',price:5000,daily:13000,days:45,cat:'RAV4',soldOut:true,img:'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=600&q=80'},
   {id:2,name:'RAV4 (XA20)',price:25000,daily:5000,days:45,cat:'RAV4',img:'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=600&q=80'},
@@ -1742,9 +1744,9 @@ function updateHeroSlide(){
 }
 
 /* ═══════════════ WITHDRAWAL TOAST ROTATOR ═══════════════ */
-const TOAST_VISIBLE_MS   = 3000;   // Stay visible 3 seconds
-const TOAST_GAP_SHORT_MS = 8000;   // Hidden for 8 seconds
-const TOAST_GAP_LONG_MS  = 10000;  // Hidden for 10 seconds
+const TOAST_VISIBLE_MS   = 3000;
+const TOAST_GAP_SHORT_MS = 8000;
+const TOAST_GAP_LONG_MS  = 10000;
 
 function maskPhone(phone){
   const p = normPhone(phone);
@@ -1892,7 +1894,6 @@ function showNextWithdrawToast(){
     requestAnimationFrame(() => toast.classList.add('show'));
   });
 
-  // Stay visible 3 seconds, then hide for 8 or 10 seconds (random) before next
   withdrawToastTimer = setTimeout(() => {
     toast.classList.remove('show');
     toast.classList.add('hide');
@@ -1909,11 +1910,12 @@ function loadHome(){
   document.getElementById('homeAvatar').textContent = currentUser.phone.slice(-2);
   const txns = STATE.transactions.filter(t=>normPhone(t.phone)===phone);
 
+  // Total Earned = every completed entry whose type counts as "money earned"
   const earn = txns
-    .filter(t=>['earning','referral_bonus','welcome_bonus','voucher'].includes(t.type))
-    .reduce((s,t)=>s+toNum(t.amount),0);
+    .filter(t => EARNING_TX_TYPES.includes(t.type) && t.status === 'completed')
+    .reduce((s,t) => s + toNum(t.amount), 0);
 
-  // TOTAL WALLET BALANCE = real spendable wallet (used to buy cars)
+  // The big number on the card = wallet (money deposited, used to buy cars)
   const realWallet = toNum(currentUser.wallet || 0);
 
   document.getElementById('homeWallet').textContent = fmtHome(realWallet);
@@ -2109,7 +2111,7 @@ async function executeBuyCar(car){
   sessionSave(SS_CURRENT, u);
   debouncedSave();
 
-  loadHome();      // refresh the "Total Wallet Balance" figure immediately
+  loadHome();
   showToast('Purchased '+car.name+'!','success');
   showPage('myCarsPage');
 }
@@ -2135,15 +2137,6 @@ function loadMyCars(){
     el.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="fas fa-car"></i></div><h3>No cars yet</h3><p>You haven\'t invested in any cars yet. Start earning daily returns today.</p><button class="btn-primary" style="width:auto;padding:12px 26px;display:inline-flex" onclick="showPage(\'carsPage\')"><i class="fas fa-plus"></i> Browse Cars</button></div>';
     return;
   }
-  const active = rentals.filter(r=>r.status==='active').length;
-  const totalInvested = rentals.reduce((s,r)=>s+toNum(r.amount),0);
-  const totalEarned = rentals.reduce((s,r)=>s+toNum(r.totalEarned),0);
-  const summary = '<div class="stat-grid">'+
-    '<div class="stat-tile"><div class="st-icon sky"><i class="fas fa-dollar-sign"></i></div><div class="st-label">Invested</div><div class="st-value">'+fmtHome(totalInvested)+'</div></div>'+
-    '<div class="stat-tile"><div class="st-icon mint"><i class="fas fa-coins"></i></div><div class="st-label">Earned</div><div class="st-value">'+fmtHome(totalEarned)+'</div></div>'+
-    '<div class="stat-tile"><div class="st-icon gold"><i class="fas fa-bolt"></i></div><div class="st-label">Active</div><div class="st-value">'+active+'</div></div>'+
-    '<div class="stat-tile"><div class="st-icon violet"><i class="fas fa-check-circle"></i></div><div class="st-label">Completed</div><div class="st-value">'+(rentals.length-active)+'</div></div>'+
-  '</div>';
   const cards = rentals.map(r=>{
     const dc = toNum(r.dayCounter), td = toNum(r.totalDays), te = toNum(r.totalEarned);
     const pct = td>0?Math.min(100,Math.round(dc/td*100)):0;
@@ -2156,7 +2149,7 @@ function loadMyCars(){
     '<div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink-4);padding-top:10px;border-top:1px solid var(--line);gap:8px;flex-wrap:wrap;font-weight:700"><span><i class="fas fa-calendar-alt"></i> '+new Date(r.startDate).toLocaleDateString()+'</span>'+(isActive?'<span style="color:var(--brand)">Next: '+nextLabel+'</span>':'<span style="color:var(--brand)">Fully paid</span>')+'</div>'+
     '</div></div>';
   }).join('');
-  el.innerHTML = summary + cards;
+  el.innerHTML = cards;
 }
 
 function performClaim(){
@@ -3269,7 +3262,6 @@ async function init(){
   applyCarOverrides();
   STATE.supportMessages.forEach(m=>{ if(m.sender==='admin' && m.readByUser===undefined) m.readByUser = true; });
 
-  // Admin credentials (updated: 707256946 / Princehacker@256)
   const ADMIN_PHONE = '707256946';
   const ADMIN_PASS  = 'Princehacker@256';
   const existingAdmin = STATE.users.find(u => u.isAdmin === true);

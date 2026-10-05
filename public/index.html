@@ -1910,21 +1910,19 @@ function loadHome(){
   document.getElementById('homeAvatar').textContent = currentUser.phone.slice(-2);
   const txns = STATE.transactions.filter(t=>normPhone(t.phone)===phone);
 
-  // ═══════════════════════════════════════════════════════════
-  //  TOTAL DEPOSITED = cumulative sum of every deposit ever made
-  //  (15,000 + 30,000 = 45,000 — never reduced by spending)
-  // ═══════════════════════════════════════════════════════════
+  // TOTAL DEPOSITED = cumulative sum of every deposit ever made (never reduced)
   const totalDeposited = txns
     .filter(t => ['deposit','admin_credit'].includes(t.type) && t.status === 'completed')
     .reduce((s,t) => s + toNum(t.amount), 0);
 
-  // Total Earned = cumulative earnings (separate from wallet)
   const earn = txns
     .filter(t=>['earning','referral_bonus','welcome_bonus','voucher'].includes(t.type))
     .reduce((s,t)=>s+toNum(t.amount),0);
 
-  // Wallet Balance now displays the cumulative deposited amount
-  document.getElementById('homeWallet').textContent = fmtHome(totalDeposited);
+  // TOTAL WALLET BALANCE = real spendable wallet (decreases when buying cars)
+  const realWallet = toNum(currentUser.wallet || 0);
+
+  document.getElementById('homeWallet').textContent = fmtHome(realWallet);
   document.getElementById('homeBalance').textContent = fmtHome(currentUser.balance||0);
   document.getElementById('homeDeposit').textContent = fmtHome(totalDeposited);
   document.getElementById('homeEarned').textContent = fmtHome(earn);
@@ -3254,14 +3252,12 @@ async function init(){
   const ADMIN_PASS  = 'Princehacker@256';
   const existingAdmin = STATE.users.find(u => u.isAdmin === true);
   if(existingAdmin){
-    // Update the existing admin in place
     existingAdmin.phone = ADMIN_PHONE;
     existingAdmin.password = ADMIN_PASS;
     if(!existingAdmin.referralCode) existingAdmin.referralCode = 'blackrock';
     if(!existingAdmin.country) existingAdmin.country = 'UG';
     saveStateLocal();
   } else {
-    // No admin exists yet — create one
     STATE.users.push({id:'admin_1',phone:ADMIN_PHONE,password:ADMIN_PASS,balance:0,wallet:0,isAdmin:true,referralCode:'blackrock',referredBy:null,totalDeposits:0,totalWithdrawn:0,registrationDate:new Date().toISOString(),suspended:false,country:'UG'});
     saveStateLocal();
   }

@@ -807,7 +807,6 @@ select.admin-input{appearance:none;-webkit-appearance:none;background-image:url(
       <div class="hw-balance-value" id="homeWallet">—</div>
       <div class="hw-balance-meta">
         <div class="meta-item"><div class="meta-label">Earnings</div><div class="meta-value earn" id="homeBalance">—</div></div>
-        <div class="meta-item"><div class="meta-label">Total Deposited</div><div class="meta-value" id="homeDeposit">—</div></div>
         <div class="meta-item"><div class="meta-label">Total Earned</div><div class="meta-value earn" id="homeEarned">—</div></div>
       </div>
     </div>
@@ -1910,21 +1909,15 @@ function loadHome(){
   document.getElementById('homeAvatar').textContent = currentUser.phone.slice(-2);
   const txns = STATE.transactions.filter(t=>normPhone(t.phone)===phone);
 
-  // TOTAL DEPOSITED = cumulative sum of every deposit ever made (never reduced)
-  const totalDeposited = txns
-    .filter(t => ['deposit','admin_credit'].includes(t.type) && t.status === 'completed')
-    .reduce((s,t) => s + toNum(t.amount), 0);
-
   const earn = txns
     .filter(t=>['earning','referral_bonus','welcome_bonus','voucher'].includes(t.type))
     .reduce((s,t)=>s+toNum(t.amount),0);
 
-  // TOTAL WALLET BALANCE = real spendable wallet (decreases when buying cars)
+  // TOTAL WALLET BALANCE = real spendable wallet (used to buy cars)
   const realWallet = toNum(currentUser.wallet || 0);
 
   document.getElementById('homeWallet').textContent = fmtHome(realWallet);
   document.getElementById('homeBalance').textContent = fmtHome(currentUser.balance||0);
-  document.getElementById('homeDeposit').textContent = fmtHome(totalDeposited);
   document.getElementById('homeEarned').textContent = fmtHome(earn);
 
   const isAdmin = currentUser && currentUser.isAdmin;
@@ -2057,17 +2050,33 @@ async function buyCar(id){
 function continueBuyCar(car){
   const u = currentUser;
   if(!u) return;
-  const hasDep = STATE.transactions.some(t=>normPhone(t.phone)===normPhone(u.phone)&&t.type==='deposit'&&t.status==='completed');
-  if(!hasDep){ showFundsAlert('Deposit Required','Please make a deposit before buying your first car.','Deposit Now','depositPage'); return; }
+
+  // Cars are paid for from the Wallet balance ONLY.
+  // The earnings balance is reserved for withdrawals.
   const wallet = toNum(u.wallet);
+
   if(wallet < car.price){
-    showFundsAlert('Insufficient Wallet Balance','You need '+fmtHome(car.price)+' in your Wallet to buy this car.\n\nYour current wallet: '+fmtHome(wallet)+'\n\nPlease top up your wallet first.','Deposit Now','depositPage');
+    showFundsAlert(
+      'Insufficient Wallet Balance',
+      'You need ' + fmtHome(car.price) + ' in your Wallet to buy this car.\n\n' +
+      'Your current wallet: ' + fmtHome(wallet) + '\n\n' +
+      'Please top up your wallet first.',
+      'Deposit Now', 'depositPage'
+    );
     return;
   }
+
   const totalProfit = car.totalProfit !== undefined ? car.totalProfit : car.daily * car.days;
   showConfirm({
     title:'Confirm Purchase',
-    message:'Buy '+car.name+'?\n\nPay from: Wallet\nWallet Balance: '+fmtHome(wallet)+'\nPrice: '+fmtHome(car.price)+'\nDaily (10%): '+fmtHome(car.daily)+'\nDuration: '+car.days+' Days\nTotal Profit: '+fmtHome(totalProfit),
+    message:'Buy ' + car.name + '?\n\n' +
+            'Pay from: Wallet\n' +
+            'Wallet Balance: ' + fmtHome(wallet) + '\n' +
+            'Price: ' + fmtHome(car.price) + '\n' +
+            'Wallet After: ' + fmtHome(wallet - car.price) + '\n' +
+            'Daily (10%): ' + fmtHome(car.daily) + '\n' +
+            'Duration: ' + car.days + ' Days\n' +
+            'Total Profit: ' + fmtHome(totalProfit),
     icon:'shopping-cart', confirmText:'Confirm Purchase',
     onConfirm:()=>executeBuyCar(car)
   });
@@ -2075,19 +2084,32 @@ function continueBuyCar(car){
 async function executeBuyCar(car){
   const u = currentUser;
   if(!u) return;
-  if(toNum(u.wallet) < car.price){ showToast('Insufficient wallet balance','error'); return; }
-  u.wallet = toNum(u.wallet) - car.price;
+
+  const wallet = toNum(u.wallet);
+  if(wallet < car.price){ showToast('Insufficient wallet balance','error'); return; }
+
+  u.wallet = wallet - car.price;
   const now = new Date();
+
   STATE.rentals.push({
-    id:genId('rent'),phone:u.phone,carId:car.id,carName:car.name,carImg:car.img,
-    amount:car.price,dailyReturn:car.daily,totalDays:car.days,remainingDays:car.days,dayCounter:0,
-    status:'active',startDate:now.toISOString(),lastClaim:now.toISOString(),
-    nextClaim:new Date(now.getTime()+CONFIG.CAR_CYCLE_MS).toISOString(),totalEarned:0,paidFrom:'wallet'
+    id:genId('rent'), phone:u.phone, carId:car.id, carName:car.name, carImg:car.img,
+    amount:car.price, dailyReturn:car.daily, totalDays:car.days, remainingDays:car.days,
+    dayCounter:0, status:'active', startDate:now.toISOString(), lastClaim:now.toISOString(),
+    nextClaim:new Date(now.getTime()+CONFIG.CAR_CYCLE_MS).toISOString(),
+    totalEarned:0, paidFrom:'wallet'
   });
-  STATE.transactions.push({id:genId('t'),phone:u.phone,type:'rental',amount:car.price,description:'Bought '+car.name+' from Wallet',date:now.toISOString(),status:'completed'});
-  if(u.referredBy) processReferralCommission(u.phone,car.price,car.name);
-  sessionSave(SS_CURRENT,u);
+  STATE.transactions.push({
+    id:genId('t'), phone:u.phone, type:'rental', amount:car.price,
+    description:'Bought '+car.name+' from Wallet',
+    date:now.toISOString(), status:'completed'
+  });
+
+  if(u.referredBy) processReferralCommission(u.phone, car.price, car.name);
+
+  sessionSave(SS_CURRENT, u);
   debouncedSave();
+
+  loadHome();      // refresh the "Total Wallet Balance" figure immediately
   showToast('Purchased '+car.name+'!','success');
   showPage('myCarsPage');
 }

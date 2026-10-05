@@ -1902,23 +1902,33 @@ function showNextWithdrawToast(){
   }, TOAST_VISIBLE_MS);
 }
 
+/* ═══════════════ HOME ═══════════════ */
 function loadHome(){
   if(!currentUser) return;
   const phone = normPhone(currentUser.phone);
   document.getElementById('homeName').textContent = currentUser.phone;
   document.getElementById('homeAvatar').textContent = currentUser.phone.slice(-2);
   const txns = STATE.transactions.filter(t=>normPhone(t.phone)===phone);
-  const dep = txns
-    .filter(t=>['deposit','admin_credit'].includes(t.type) && t.status==='completed')
-    .reduce((s,t)=>s+toNum(t.amount),0);
+
+  // ═══════════════════════════════════════════════════════════
+  //  TOTAL DEPOSITED = cumulative sum of every deposit ever made
+  //  (15,000 + 30,000 = 45,000 — never reduced by spending)
+  // ═══════════════════════════════════════════════════════════
+  const totalDeposited = txns
+    .filter(t => ['deposit','admin_credit'].includes(t.type) && t.status === 'completed')
+    .reduce((s,t) => s + toNum(t.amount), 0);
+
+  // Total Earned = cumulative earnings (separate from wallet)
   const earn = txns
     .filter(t=>['earning','referral_bonus','welcome_bonus','voucher'].includes(t.type))
     .reduce((s,t)=>s+toNum(t.amount),0);
-  const wallet = toNum(currentUser.wallet||0);
-  document.getElementById('homeWallet').textContent = fmtHome(wallet);
+
+  // Wallet Balance now displays the cumulative deposited amount
+  document.getElementById('homeWallet').textContent = fmtHome(totalDeposited);
   document.getElementById('homeBalance').textContent = fmtHome(currentUser.balance||0);
-  document.getElementById('homeDeposit').textContent = fmtHome(dep);
+  document.getElementById('homeDeposit').textContent = fmtHome(totalDeposited);
   document.getElementById('homeEarned').textContent = fmtHome(earn);
+
   const isAdmin = currentUser && currentUser.isAdmin;
   const visibleCars = getAllCars().filter(c => isAdmin || !c.hidden);
   document.getElementById('homeFeatured').innerHTML = visibleCars.slice(0,3).map(carCardHtml).join('');

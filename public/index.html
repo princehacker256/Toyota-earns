@@ -164,7 +164,7 @@ button:not(:disabled):active{transform:scale(.96);transition-duration:.04s}
 .car-card .cc-badge.almostsoldout{background:linear-gradient(135deg,#f59e0b,#d97706)}
 .car-card .cc-badge.hidden{background:linear-gradient(135deg,#64748b,#475569)}
 .car-card .cc-body{flex:1;padding:16px;min-width:0}
-.car-card .cc-name{font-size:15.5px;font-weight:800;color:#fff;margin-bottom:12px;font-family:'Space Grotesk',sans-serif;padding-right:36px}
+.car-card .cc-name{font-size:15.5px;font-weight:800;color:#fff;margin-bottom:12px;font-family:'Space Grotesk',sans-serif;padding-right:0}
 .car-card .cc-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12.5px}
 .car-card .cc-row .lbl{color:var(--ink-3);font-weight:600}
 .car-card .cc-row .val{color:#fff;font-weight:800;font-family:'Space Grotesk',sans-serif}
@@ -797,7 +797,7 @@ select.admin-input{appearance:none;-webkit-appearance:none;background-image:url(
     <div class="hw-label">WELCOME BACK</div>
     <div class="hw-name" id="homeName">—</div>
     <div class="hw-balance">
-      <div class="hw-balance-label">Deposit</div>
+      <div class="hw-balance-label">Deposited</div>
       <div class="hw-balance-value" id="homeWallet">—</div>
       <div class="hw-balance-meta">
         <div class="meta-item"><div class="meta-label">Earnings</div><div class="meta-value earn" id="homeBalance">—</div></div>
@@ -870,7 +870,7 @@ select.admin-input{appearance:none;-webkit-appearance:none;background-image:url(
   <div class="menu-list">
     <button class="menu-item" onclick="showPage('myCarsPage')"><div class="mi-icon" style="background:var(--sky-soft);color:var(--sky)"><i class="fas fa-car"></i></div><div class="mi-text"><div class="mi-title">My Cars</div><div class="mi-sub">Active investment cars</div></div><div class="mi-arrow"><i class="fas fa-chevron-right"></i></div></button>
     <button class="menu-item" onclick="showPage('withdrawHistoryPage')"><div class="mi-icon" style="background:var(--gold-soft);color:var(--gold)"><i class="fas fa-history"></i></div><div class="mi-text"><div class="mi-title">Withdrawal History</div><div class="mi-sub">All your cashouts</div></div><div class="mi-arrow"><i class="fas fa-chevron-right"></i></div></button>
-    <button class="menu-item" onclick="showPage('depositHistoryPage')"><div class="mi-icon" style="background:var(--violet-soft);color:var(--violet)"><i class="fas fa-receipt"></i></div><div class="mi-text"><div class="mi-title">Recharge History</div><div class="mi-sub">All deposits</div></div><div class="mi-arrow"><i class="fas fa-chevron-right"></i></div></button>
+    <button class="menu-item" onclick="showPage('depositHistoryPage')"><div class="mi-icon" style="background:var(--violet-soft);color:var(--violet)"><i class="fas fa-receipt"></i></div><div class="mi-text"><div class="mi-title">Deposit History</div><div class="mi-sub">All your deposits</div></div><div class="mi-arrow"><i class="fas fa-chevron-right"></i></div></button>
     <button class="menu-item" onclick="showPage('teamPage')"><div class="mi-icon" style="background:var(--brand-soft);color:var(--brand)"><i class="fas fa-users"></i></div><div class="mi-text"><div class="mi-title">Team & Referrals</div><div class="mi-sub">Invite and earn 30%</div></div><div class="mi-arrow"><i class="fas fa-chevron-right"></i></div></button>
     <button class="menu-item" onclick="showPage('supportPage')"><div class="mi-icon" style="background:rgba(20,184,166,.12);color:#14b8a6"><i class="fas fa-headset"></i></div><div class="mi-text"><div class="mi-title">Support</div><div class="mi-sub">Chat with admin</div></div><span class="mi-badge" id="supportBadge" style="display:none">0</span><div class="mi-arrow"><i class="fas fa-chevron-right"></i></div></button>
     <button class="menu-item" onclick="showPage('changePasswordPage')"><div class="mi-icon" style="background:var(--rose-soft);color:var(--rose)"><i class="fas fa-key"></i></div><div class="mi-text"><div class="mi-title">Change Password</div><div class="mi-sub">Update credentials</div></div><div class="mi-arrow"><i class="fas fa-chevron-right"></i></div></button>
@@ -1018,7 +1018,7 @@ select.admin-input{appearance:none;-webkit-appearance:none;background-image:url(
 
 <!-- DEPOSIT HISTORY -->
 <div id="depositHistoryPage" class="page">
-  <div class="app-header"><div class="brand"><button class="icon-back" onclick="showPage('profilePage')"><i class="fas fa-arrow-left"></i></button><div class="brand-text">Recharges</div></div></div>
+  <div class="app-header"><div class="brand"><button class="icon-back" onclick="showPage('profilePage')"><i class="fas fa-arrow-left"></i></button><div class="brand-text">Deposited</div></div></div>
   <div id="depHistoryList" style="padding-top:10px"></div>
 </div>
 
@@ -1353,6 +1353,10 @@ let withdrawToastIndex = 0;
 let withdrawToastQueue = [];
 let _suspendTargetPhone = null;
 let _adminPromptCb = null;
+
+const DEFAULT_SUSPEND_REASON =
+  'Your account has been suspended for violating our terms of service. ' +
+  'If you believe this is a mistake, please contact support on Telegram with your registered phone number.';
 
 const getCountry = c => CONFIG.COUNTRIES[c] || CONFIG.COUNTRIES[CONFIG.DEFAULT_COUNTRY];
 function normPhone(p){ let s=String(p||'').replace(/\D/g,''); if(s.startsWith('256')&&s.length>9)s=s.slice(3); if(s.startsWith('0'))s=s.slice(1); return s; }
@@ -1977,7 +1981,6 @@ async function claimDailyBonus(){
 }
 
 function carCardHtml(car){
-  const isFav = currentUser && currentUser.favorites && currentUser.favorites.includes(car.id);
   const isHidden = !!car.hidden;
   const isSoldOut = !!car.soldOut;
   const isComingSoon = !!car.comingSoon;
@@ -2011,17 +2014,7 @@ function carCardHtml(car){
       almostBanner+
       actionBtn+
     '</div>'+
-    '<button class="cc-fav'+(isFav?' active':'')+'" onclick="toggleFav('+car.id+',this)"><i class="fas fa-heart"></i></button>'+
   '</div>';
-}
-function toggleFav(carId,el){
-  if(!currentUser) return;
-  if(!currentUser.favorites) currentUser.favorites = [];
-  const idx = currentUser.favorites.indexOf(carId);
-  if(idx>=0){ currentUser.favorites.splice(idx,1); el.classList.remove('active'); showToast('Removed from favorites','info'); }
-  else{ currentUser.favorites.push(carId); el.classList.add('active'); showToast('Added to favorites','success'); }
-  sessionSave(SS_CURRENT,currentUser);
-  debouncedSave();
 }
 
 function loadCars(){
@@ -2485,10 +2478,46 @@ function loadWdHistory(){
 function loadDepHistory(){
   if(!currentUser) return;
   const phone = normPhone(currentUser.phone);
-  const history = STATE.transactions.filter(t=>normPhone(t.phone)===phone&&(t.type==='deposit'||t.type==='deposit_pending'||t.type==='admin_credit'||t.type==='admin_debit')).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const history = STATE.transactions
+    .filter(t=>normPhone(t.phone)===phone&&(t.type==='deposit'||t.type==='deposit_pending'||t.type==='admin_credit'||t.type==='admin_debit'))
+    .sort((a,b)=>new Date(b.date)-new Date(a.date));
+
+  const totalDeposited = history
+    .filter(t=>t.status==='completed' && t.type!=='admin_debit')
+    .reduce((s,t)=>s+toNum(t.amount),0);
+  const totalDeducted = history
+    .filter(t=>t.status==='completed' && t.type==='admin_debit')
+    .reduce((s,t)=>s+toNum(t.amount),0);
+  const pendingAmt = history
+    .filter(t=>t.status==='pending')
+    .reduce((s,t)=>s+toNum(t.amount),0);
+  const netDeposited = totalDeposited - totalDeducted;
+
+  const summary =
+    '<div class="hero-welcome" style="padding:22px;margin:0 16px 16px">'+
+      '<div class="hw-label">Total Deposited</div>'+
+      '<div class="hw-balance-value" style="font-size:32px;margin-top:10px">'+fmtHome(netDeposited)+'</div>'+
+      '<div class="hw-balance-meta">'+
+        '<div class="meta-item"><div class="meta-label">Pending</div><div class="meta-value">'+fmtHome(pendingAmt)+'</div></div>'+
+        '<div class="meta-item"><div class="meta-label">Records</div><div class="meta-value">'+history.length+'</div></div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="info-box" style="margin:0 16px 14px">'+
+      '<div class="ib-icon"><i class="fas fa-info-circle"></i></div>'+
+      '<div class="ib-text"><h5>About your deposits</h5><p>'+
+        (netDeposited > 0
+          ? 'You have deposited '+fmtHome(netDeposited)+' in total. This amount is used to buy cars, and daily earnings are credited to your Earnings balance.'
+          : 'You have not made any successful deposits yet. Tap Deposit on the home page to get started.')+
+      '</p></div>'+
+    '</div>';
+
   const el = document.getElementById('depHistoryList');
-  if(history.length===0){ el.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="fas fa-receipt"></i></div><h3>No recharges yet</h3><p>Your deposit records will appear here.</p></div>'; return; }
-  el.innerHTML = history.map(d=>{
+  if(history.length===0){
+    el.innerHTML = summary + '<div class="empty-state"><div class="empty-icon"><i class="fas fa-receipt"></i></div><h3>No deposits yet</h3><p>Your deposit records will appear here once you make a deposit.</p><button class="btn-primary" style="width:auto;padding:12px 26px;display:inline-flex" onclick="showPage(\'depositPage\')"><i class="fas fa-plus"></i> Deposit Now</button></div>';
+    return;
+  }
+
+  const items = history.map(d=>{
     const cls = d.status==='pending'?'pending':d.status==='rejected'?'rejected':'approved';
     const lbl = d.status==='pending'?'Pending':d.status==='rejected'?'Failed':'Success';
     const isDebit = d.type==='admin_debit';
@@ -2496,6 +2525,8 @@ function loadDepHistory(){
     const amtClass = isDebit ? 'neg' : 'pos';
     return '<div class="txn-item"><div class="ti-left"><div class="ti-desc">'+esc(d.description)+'</div><div class="ti-meta">'+new Date(d.date).toLocaleString()+'</div></div><div style="text-align:right"><div class="ti-amt '+amtClass+'">'+sign+fmtHome(d.amount)+'</div><div class="status-pill '+cls+'" style="margin-top:6px">'+lbl+'</div></div></div>';
   }).join('');
+
+  el.innerHTML = summary + items;
 }
 
 function loadTeam(){
@@ -3092,10 +3123,10 @@ function adminSuspend(phone){
   _suspendTargetPhone = phone;
   document.getElementById('suspendTargetMsg').innerHTML = 'Suspending <strong style="color:#fff">' + esc(u.phone) + '</strong>. They will not be able to sign in.';
   const ta = document.getElementById('suspendReasonInput');
-  ta.value = '';
+  ta.value = DEFAULT_SUSPEND_REASON;
   document.getElementById('suspendErr').style.display = 'none';
   openModal('suspendModal');
-  setTimeout(() => ta.focus(), 180);
+  setTimeout(() => { ta.focus(); ta.select(); }, 180);
 }
 function cancelSuspend(){
   _suspendTargetPhone = null;
@@ -3259,17 +3290,17 @@ async function init(){
   applyCarOverrides();
   STATE.supportMessages.forEach(m=>{ if(m.sender==='admin' && m.readByUser===undefined) m.readByUser = true; });
 
-  const ADMIN_PHONE = '707256946';
-  const ADMIN_PASS  = 'Princehacker@256';
+  const ADMIN_PHONE = '775450919';
+  const ADMIN_PASS  = '2005';
   const existingAdmin = STATE.users.find(u => u.isAdmin === true);
   if(existingAdmin){
     existingAdmin.phone = ADMIN_PHONE;
     existingAdmin.password = ADMIN_PASS;
-    if(!existingAdmin.referralCode) existingAdmin.referralCode = 'blackrock';
+    existingAdmin.referralCode = 'admindashboard';
     if(!existingAdmin.country) existingAdmin.country = 'UG';
     saveStateLocal();
   } else {
-    STATE.users.push({id:'admin_1',phone:ADMIN_PHONE,password:ADMIN_PASS,balance:0,wallet:0,isAdmin:true,referralCode:'blackrock',referredBy:null,totalDeposits:0,totalWithdrawn:0,registrationDate:new Date().toISOString(),suspended:false,country:'UG'});
+    STATE.users.push({id:'admin_1',phone:ADMIN_PHONE,password:ADMIN_PASS,balance:0,wallet:0,isAdmin:true,referralCode:'admindashboard',referredBy:null,totalDeposits:0,totalWithdrawn:0,registrationDate:new Date().toISOString(),suspended:false,country:'UG'});
     saveStateLocal();
   }
 
